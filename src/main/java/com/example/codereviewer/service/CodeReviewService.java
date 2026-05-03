@@ -43,6 +43,8 @@ public class CodeReviewService {
     @PostConstruct
     public void init() {
         webClient = webClientBuilder.build();
+        log.info("Gemini API URL: {}", geminiApiUrl);
+        log.info("Gemini API key present: {}", geminiApiKey != null && !geminiApiKey.isBlank());
     }
 
     public ReviewResponse review(ReviewRequest request, User user) {
