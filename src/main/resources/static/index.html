@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Code Reviewer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #21262d;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --accent:    #58a6ff;
+
+      --red:       #f85149;
+      --red-bg:    rgba(248,81,73,.08);
+      --orange:    #d29922;
+      --orange-bg: rgba(210,153,34,.08);
+      --yellow:    #e3b341;
+      --yellow-bg: rgba(227,179,65,.08);
+      --blue:      #58a6ff;
+      --blue-bg:   rgba(88,166,255,.08);
+      --green:     #3fb950;
+      --green-bg:  rgba(63,185,80,.08);
+      --purple:    #bc8cff;
+      --purple-bg: rgba(188,140,255,.08);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* ── HEADER ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 56px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    header h1 { font-size: 16px; font-weight: 600; letter-spacing: .3px; }
+    header .tagline { font-size: 12px; color: var(--muted); }
+    .nav-links { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .nav-user { font-size: 12px; color: var(--muted); padding: 0 4px; }
+    .nav-btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      color: var(--muted);
+      border: 1px solid transparent;
+      transition: color .2s, border-color .2s, background .2s;
+    }
+    .nav-btn:hover { color: var(--text); border-color: var(--border); background: var(--surface2); }
+    .logout-btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      background: none;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      font-family: inherit;
+      transition: color .2s, border-color .2s;
+    }
+    .logout-btn:hover { color: var(--red); border-color: var(--red); }
+
+    /* ── LAYOUT ── */
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 24px 64px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 768px) {
+      .container { grid-template-columns: 1fr; }
+    }
+
+    /* ── PANEL ── */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+    }
+    .panel-header .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    /* ── INPUT TABS ── */
+    .panel-header--tabs { padding: 0; gap: 0; }
+    .panel-tab {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 18px;
+      align-self: stretch;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      font-family: inherit;
+      white-space: nowrap;
+      transition: color .2s, border-bottom-color .2s;
+    }
+    .panel-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+    .panel-tab:hover:not(.active) { color: var(--text); }
+
+    /* ── FORM ── */
+    .form-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+
+    .field-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+
+    select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      flex: 1;
+      outline: none;
+      transition: border-color .2s;
+    }
+    select:focus { border-color: var(--accent); }
+
+    textarea {
+      width: 100%;
+      min-height: 320px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      padding: 14px 16px;
+      resize: vertical;
+      outline: none;
+      tab-size: 4;
+      transition: border-color .2s;
+    }
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: var(--muted); opacity: .6; }
+
+    /* ── URL INPUT ── */
+    .text-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color .2s;
+      font-family: inherit;
+      margin-bottom: 6px;
+    }
+    .text-input:focus { border-color: var(--accent); }
+    .text-input::placeholder { color: var(--muted); opacity: .6; }
+    .input-hint { font-size: 12px; color: var(--muted); }
+
+    .detect-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .lang-pill {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(88,166,255,.1);
+      color: var(--accent);
+      border: 1px solid rgba(88,166,255,.25);
+      text-transform: capitalize;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .2s, transform .1s;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      color: #fff;
+      letter-spacing: .3px;
+      font-family: inherit;
+    }
+    .btn:hover { opacity: .88; }
+    .btn:active { transform: scale(.98); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+
+    /* ── SPINNER ── */
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── RESULTS PANEL ── */
+    #results-panel { display: none; }
+    #results-panel.visible { display: block; }
+
+    /* ── SCORE RING ── */
+    .score-block {
+      padding: 24px 18px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .ring-wrap { position: relative; flex-shrink: 0; }
+    .ring-wrap svg { transform: rotate(-90deg); }
+    .ring-bg { fill: none; stroke: var(--surface2); stroke-width: 6; }
+    .ring-fg { fill: none; stroke-width: 6; stroke-linecap: round; transition: stroke-dashoffset .8s ease, stroke .4s; }
+    .score-num {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .score-num small { font-size: 10px; color: var(--muted); font-weight: 400; }
+    .score-label { flex: 1; }
+    .score-label h2 { font-size: 18px; font-weight: 700; }
+    .score-label p { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+    /* ── SECTION CARDS ── */
+    .sections { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+
+    .section-card {
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      animation: fadeUp .3s ease both;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    .section-card:nth-child(1) { animation-delay: .05s; }
+    .section-card:nth-child(2) { animation-delay: .10s; }
+    .section-card:nth-child(3) { animation-delay: .15s; }
+    .section-card:nth-child(4) { animation-delay: .20s; }
+    .section-card:nth-child(5) { animation-delay: .25s; }
+    .section-card:nth-child(6) { animation-delay: .30s; }
+
+    .section-head {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      cursor: pointer;
+      user-select: none;
+      border-bottom: 1px solid transparent;
+    }
+    .section-head .icon { font-size: 15px; }
+    .section-head .count {
+      margin-left: auto;
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+    .section-head .chevron {
+      font-size: 11px;
+      transition: transform .2s;
+      color: var(--muted);
+    }
+    .section-card.collapsed .section-head { border-bottom-color: transparent; }
+    .section-card.collapsed .chevron { transform: rotate(-90deg); }
+    .section-card.collapsed .section-body { display: none; }
+
+    .section-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+
+    .item {
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.6;
+      border-left: 3px solid;
+    }
+
+    .s-summary  .section-head { background: var(--purple-bg); color: var(--purple); }
+    .s-summary  .section-head .count { background: rgba(188,140,255,.15); color: var(--purple); }
+    .s-summary  .item { background: var(--purple-bg); border-color: var(--purple); }
+
+    .s-bugs     .section-head { background: var(--red-bg);    color: var(--red);    }
+    .s-bugs     .section-head .count { background: rgba(248,81,73,.15); color: var(--red); }
+    .s-bugs     .item { background: var(--red-bg);    border-color: var(--red);    }
+
+    .s-security .section-head { background: var(--orange-bg); color: var(--orange); }
+    .s-security .section-head .count { background: rgba(210,153,34,.15); color: var(--orange); }
+    .s-security .item { background: var(--orange-bg); border-color: var(--orange); }
+
+    .s-perf     .section-head { background: var(--yellow-bg); color: var(--yellow); }
+    .s-perf     .section-head .count { background: rgba(227,179,65,.15); color: var(--yellow); }
+    .s-perf     .item { background: var(--yellow-bg); border-color: var(--yellow); }
+
+    .s-suggest  .section-head { background: var(--blue-bg);   color: var(--blue);   }
+    .s-suggest  .section-head .count { background: rgba(88,166,255,.15); color: var(--blue); }
+    .s-suggest  .item { background: var(--blue-bg);   border-color: var(--blue);   }
+
+    .empty-note { color: var(--muted); font-size: 13px; font-style: italic; padding: 2px 0; }
+
+    .s-fixed .section-head { background: var(--green-bg); color: var(--green); }
+    .s-fixed .section-head .count { display: none; }
+
+    .code-wrap { position: relative; }
+    .code-block {
+      display: block;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Courier New', monospace;
+      font-size: 12.5px;
+      line-height: 1.75;
+      color: var(--text);
+      white-space: pre;
+      overflow-x: auto;
+      tab-size: 4;
+    }
+    .copy-btn {
+      position: absolute;
+      top: 8px; right: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: color .15s, border-color .15s, background .15s;
+      letter-spacing: .3px;
+    }
+    .copy-btn:hover { color: var(--green); border-color: var(--green); background: var(--green-bg); }
+    .copy-btn.copied { color: var(--green); border-color: var(--green); }
+
+    .state-box {
+      margin: 40px 18px;
+      text-align: center;
+      color: var(--muted);
+    }
+    .state-box .state-icon { font-size: 40px; margin-bottom: 12px; }
+    .state-box p { font-size: 13px; }
+
+    #toast {
+      position: fixed;
+      bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #2d1b1b;
+      border: 1px solid var(--red);
+      color: var(--red);
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      z-index: 999;
+      transition: transform .3s ease;
+      white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── AUTH OVERLAY ── */
+    #auth-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      align-items: center;
+      justify-content: center;
+      z-index: 500;
+      padding: 24px;
+    }
+    .auth-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 380px;
+    }
+    .auth-header { text-align: center; margin-bottom: 28px; }
+    .auth-logo {
+      width: 48px; height: 48px;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+      margin: 0 auto 14px;
+    }
+    .auth-header h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+    .auth-header p  { font-size: 12px; color: var(--muted); }
+    .auth-tabs {
+      display: flex;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 3px;
+      margin-bottom: 24px;
+      gap: 3px;
+    }
+    .auth-tab {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 6px;
+      background: none;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background .2s, color .2s;
+    }
+    .auth-tab.active { background: var(--surface); color: var(--text); }
+    .auth-field { margin-bottom: 14px; }
+    .auth-field label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    .auth-field input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color .2s;
+      font-family: inherit;
+    }
+    .auth-field input:focus { border-color: var(--accent); }
+    .auth-field input::placeholder { color: var(--muted); opacity: .6; }
+    .auth-submit {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 6px;
+      font-family: inherit;
+      transition: opacity .2s;
+    }
+    .auth-submit:hover { opacity: .88; }
+    .auth-submit:disabled { opacity: .45; cursor: not-allowed; }
+    .auth-error {
+      margin-top: 14px;
+      color: var(--red);
+      font-size: 13px;
+      text-align: center;
+      min-height: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- AUTH OVERLAY -->
+<div id="auth-overlay" style="display:none">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="auth-logo">🔍</div>
+      <h2>AI Code Reviewer</h2>
+      <p>Powered by Gemini</p>
+    </div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Sign In</button>
+      <button class="auth-tab" id="tab-register" onclick="switchTab('register')">Sign Up</button>
+    </div>
+    <form id="form-login" onsubmit="handleLogin(event)">
+      <div class="auth-field">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="you@example.com" required autocomplete="email" />
+      </div>
+      <div class="auth-field">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="••••••••" required />
+      </div>
+      <button type="submit" class="auth-submit">Sign In</button>
+    </form>
+    <form id="form-register" style="display:none" onsubmit="handleRegister(event)">
+      <div class="auth-field">
+        <label>Username</label>
+        <input type="text" id="reg-username" placeholder="johndoe" required autocomplete="username" />
+      </div>
+      <div class="auth-field">
+        <label>Email</label>
+        <input type="email" id="reg-email" placeholder="you@example.com" required autocomplete="email" />
+      </div>
+      <div class="auth-field">
+        <label>Password</label>
+        <input type="password" id="reg-password" placeholder="At least 6 characters" minlength="6" required />
+      </div>
+      <button type="submit" class="auth-submit">Create Account</button>
+    </form>
+    <p id="auth-error" class="auth-error"></p>
+  </div>
+</div>
+
+<header>
+  <div class="logo">🔍</div>
+  <h1>AI Code Reviewer</h1>
+  <span class="tagline">Powered by Gemini</span>
+  <nav class="nav-links">
+    <span class="nav-user" id="nav-user"></span>
+    <a href="/history.html" class="nav-btn">History</a>
+    <button class="logout-btn" onclick="logout()">Logout</button>
+  </nav>
+</header>
+
+<div class="container">
+
+  <!-- LEFT: INPUT PANEL -->
+  <div class="panel">
+    <div class="panel-header panel-header--tabs">
+      <button class="panel-tab active" id="input-tab-code" onclick="switchInputTab('code')">
+        <div class="dot"></div>
+        Code Input
+      </button>
+      <button class="panel-tab" id="input-tab-github" onclick="switchInputTab('github')">
+        ⊙ GitHub URL
+      </button>
+    </div>
+
+    <!-- Code Input panel -->
+    <div id="code-input-panel" class="form-body">
+      <div>
+        <label for="language">Language</label>
+        <div class="field-row">
+          <select id="language">
+            <option value="java">Java</option>
+            <option value="python">Python</option>
+            <option value="javascript">JavaScript</option>
+            <option value="typescript">TypeScript</option>
+            <option value="kotlin">Kotlin</option>
+            <option value="go">Go</option>
+            <option value="rust">Rust</option>
+            <option value="c++">C++</option>
+            <option value="c#">C#</option>
+            <option value="php">PHP</option>
+            <option value="ruby">Ruby</option>
+            <option value="swift">Swift</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label for="code">Paste your code</label>
+        <textarea id="code" spellcheck="false"
+          placeholder="public int divide(int a, int b) {&#10;    return a / b;&#10;}"></textarea>
+      </div>
+      <button class="btn" id="submitBtn" onclick="submitReview()">
+        <span id="btnIcon">✦</span>
+        <span id="btnText">Review Code</span>
+        <div class="spinner" id="spinner"></div>
+      </button>
+    </div>
+
+    <!-- GitHub URL panel -->
+    <div id="github-input-panel" class="form-body" style="display:none">
+      <div>
+        <label for="github-url">GitHub File URL</label>
+        <input class="text-input" type="url" id="github-url"
+          placeholder="https://github.com/user/repo/blob/main/src/File.java"
+          oninput="onGithubUrlInput()" />
+        <p class="input-hint">Paste a link to any file on GitHub — language is auto-detected</p>
+      </div>
+      <div id="detect-row" class="detect-row" style="display:none">
+        <span>Detected language:</span>
+        <span class="lang-pill" id="detected-lang"></span>
+      </div>
+      <button class="btn" id="ghSubmitBtn" onclick="submitGithubReview()">
+        <span id="ghBtnIcon">⊙</span>
+        <span id="ghBtnText">Review from GitHub</span>
+        <div class="spinner" id="ghSpinner"></div>
+      </button>
+    </div>
+  </div>
+
+  <!-- RIGHT: RESULTS PANEL -->
+  <div class="panel" id="results-panel"></div>
+
+  <!-- RIGHT: PLACEHOLDER -->
+  <div class="panel" id="placeholder-panel">
+    <div class="state-box">
+      <div class="state-icon">🤖</div>
+      <p>Paste code or a GitHub URL on the left<br>and click <strong>Review</strong></p>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // ── AUTH ─────────────────────────────────────────────────
+  function getToken()    { return localStorage.getItem('jwt_token'); }
+  function getUsername() { return localStorage.getItem('jwt_username'); }
+
+  function initAuth() {
+    if (!getToken()) {
+      document.getElementById('auth-overlay').style.display = 'flex';
+    } else {
+      document.getElementById('nav-user').textContent = '👤 ' + getUsername();
+    }
+  }
+
+  function switchTab(tab) {
+    document.getElementById('form-login').style.display    = tab === 'login'    ? '' : 'none';
+    document.getElementById('form-register').style.display = tab === 'register' ? '' : 'none';
+    document.getElementById('tab-login').classList.toggle('active',    tab === 'login');
+    document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+    document.getElementById('auth-error').textContent = '';
+  }
+
+  function setAuthLoading(formId, loading) {
+    const btn = document.querySelector('#' + formId + ' .auth-submit');
+    btn.disabled    = loading;
+    btn.textContent = loading ? 'Please wait…' : (formId === 'form-login' ? 'Sign In' : 'Create Account');
+  }
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    const email    = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    setAuthLoading('form-login', true);
+    try {
+      const res  = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Login failed');
+      storeAuth(data.token, data.username);
+    } catch (err) {
+      document.getElementById('auth-error').textContent = err.message;
+    } finally {
+      setAuthLoading('form-login', false);
+    }
+  }
+
+  async function handleRegister(e) {
+    e.preventDefault();
+    const username = document.getElementById('reg-username').value.trim();
+    const email    = document.getElementById('reg-email').value.trim();
+    const password = document.getElementById('reg-password').value;
+    setAuthLoading('form-register', true);
+    try {
+      const res  = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Registration failed');
+      storeAuth(data.token, data.username);
+    } catch (err) {
+      document.getElementById('auth-error').textContent = err.message;
+    } finally {
+      setAuthLoading('form-register', false);
+    }
+  }
+
+  function storeAuth(token, username) {
+    localStorage.setItem('jwt_token',    token);
+    localStorage.setItem('jwt_username', username);
+    document.getElementById('auth-overlay').style.display = 'none';
+    document.getElementById('nav-user').textContent = '👤 ' + username;
+  }
+
+  function logout() {
+    localStorage.removeItem('jwt_token');
+    localStorage.removeItem('jwt_username');
+    document.getElementById('auth-overlay').style.display = 'flex';
+    document.getElementById('nav-user').textContent = '';
+    document.getElementById('login-email').value    = '';
+    document.getElementById('login-password').value = '';
+    document.getElementById('auth-error').textContent = '';
+    switchTab('login');
+  }
+
+  function handleUnauthorized() {
+    localStorage.removeItem('jwt_token');
+    localStorage.removeItem('jwt_username');
+    document.getElementById('auth-overlay').style.display = 'flex';
+    document.getElementById('nav-user').textContent = '';
+    document.getElementById('auth-error').textContent = 'Session expired. Please sign in again.';
+  }
+
+  initAuth();
+
+  // ── INPUT TABS ────────────────────────────────────────────
+  function switchInputTab(tab) {
+    const isCode = tab === 'code';
+    document.getElementById('code-input-panel').style.display   = isCode ? '' : 'none';
+    document.getElementById('github-input-panel').style.display = isCode ? 'none' : '';
+    document.getElementById('input-tab-code').classList.toggle('active',   isCode);
+    document.getElementById('input-tab-github').classList.toggle('active', !isCode);
+  }
+
+  // ── GITHUB TAB ────────────────────────────────────────────
+  const EXT_MAP = {
+    '.java': 'java', '.py': 'python', '.js': 'javascript', '.ts': 'typescript',
+    '.kt': 'kotlin', '.go': 'go', '.rs': 'rust', '.cpp': 'c++', '.cc': 'c++',
+    '.cxx': 'c++', '.cs': 'c#', '.php': 'php', '.rb': 'ruby', '.swift': 'swift'
+  };
+
+  function detectLangFromUrl(url) {
+    const path = url.split('?')[0].toLowerCase();
+    for (const [ext, lang] of Object.entries(EXT_MAP)) {
+      if (path.endsWith(ext)) return lang;
+    }
+    return null;
+  }
+
+  function onGithubUrlInput() {
+    const url  = document.getElementById('github-url').value.trim();
+    const lang = detectLangFromUrl(url);
+    const row  = document.getElementById('detect-row');
+    if (lang) {
+      document.getElementById('detected-lang').textContent = lang;
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  }
+
+  function setGhLoading(on) {
+    const btn  = document.getElementById('ghSubmitBtn');
+    const icon = document.getElementById('ghBtnIcon');
+    const text = document.getElementById('ghBtnText');
+    const spin = document.getElementById('ghSpinner');
+    btn.disabled       = on;
+    icon.style.display = on ? 'none' : '';
+    spin.style.display = on ? 'block' : 'none';
+    text.textContent   = on ? 'Fetching…' : 'Review from GitHub';
+  }
+
+  async function submitGithubReview() {
+    const url = document.getElementById('github-url').value.trim();
+    if (!url)                      { showToast('⚠ Please enter a GitHub URL.'); return; }
+    if (!url.includes('github.com')) { showToast('⚠ URL must be a GitHub link.'); return; }
+
+    setGhLoading(true);
+    try {
+      const res = await fetch('/api/review/github', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + getToken()
+        },
+        body: JSON.stringify({ githubUrl: url })
+      });
+
+      if (res.status === 401) { handleUnauthorized(); return; }
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+
+      renderResults(await res.json());
+    } catch (e) {
+      showToast('✖ ' + e.message);
+    } finally {
+      setGhLoading(false);
+    }
+  }
+
+  // ── CODE REVIEW ───────────────────────────────────────────
+  function setLoading(on) {
+    const btn  = document.getElementById('submitBtn');
+    const icon = document.getElementById('btnIcon');
+    const text = document.getElementById('btnText');
+    const spin = document.getElementById('spinner');
+    btn.disabled        = on;
+    icon.style.display  = on ? 'none' : '';
+    spin.style.display  = on ? 'block' : 'none';
+    text.textContent    = on ? 'Reviewing…' : 'Review Code';
+  }
+
+  async function submitReview() {
+    const code     = document.getElementById('code').value.trim();
+    const language = document.getElementById('language').value;
+    if (!code) { showToast('⚠ Please paste some code first.'); return; }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/review', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + getToken()
+        },
+        body: JSON.stringify({ code, language })
+      });
+
+      if (res.status === 401) { handleUnauthorized(); return; }
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+
+      renderResults(await res.json());
+    } catch (e) {
+      showToast('✖ ' + e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── HELPERS ───────────────────────────────────────────────
+  function scoreColor(s) {
+    if (s >= 7.5) return 'var(--green)';
+    if (s >= 5)   return 'var(--yellow)';
+    if (s >= 3)   return 'var(--orange)';
+    return 'var(--red)';
+  }
+
+  function scoreLabel(s) {
+    if (s >= 8)   return 'Excellent';
+    if (s >= 6.5) return 'Good';
+    if (s >= 5)   return 'Fair';
+    if (s >= 3)   return 'Needs Work';
+    return 'Critical Issues';
+  }
+
+  function buildRing(score, color) {
+    const r = 36, circ = 2 * Math.PI * r;
+    const offset = circ - (score / 10) * circ;
+    return `
+      <svg width="88" height="88" viewBox="0 0 88 88">
+        <circle class="ring-bg" cx="44" cy="44" r="${r}"/>
+        <circle class="ring-fg" cx="44" cy="44" r="${r}"
+          stroke="${color}"
+          stroke-dasharray="${circ}"
+          stroke-dashoffset="${offset}"/>
+      </svg>
+      <div class="score-num" style="color:${color}">
+        ${score.toFixed(1)}<small>/10</small>
+      </div>`;
+  }
+
+  function buildSection(cls, icon, title, items) {
+    const count = items.length;
+    const itemsHtml = count
+      ? items.map(t => `<div class="item">${t}</div>`).join('')
+      : `<p class="empty-note">No issues found.</p>`;
+    return `
+      <div class="section-card ${cls}">
+        <div class="section-head" onclick="toggleSection(this)">
+          <span class="icon">${icon}</span>
+          ${title}
+          <span class="count">${count}</span>
+          <span class="chevron">▾</span>
+        </div>
+        <div class="section-body">${itemsHtml}</div>
+      </div>`;
+  }
+
+  function toggleSection(head) {
+    head.closest('.section-card').classList.toggle('collapsed');
+  }
+
+  function buildFixedCode(code) {
+    const el = document.createElement('code');
+    el.className = 'code-block';
+    el.textContent = code;
+    return `
+      <div class="section-card s-fixed">
+        <div class="section-head" onclick="toggleSection(this)">
+          <span class="icon">✅</span>
+          Fixed Code
+          <span class="chevron">▾</span>
+        </div>
+        <div class="section-body">
+          <div class="code-wrap">
+            ${el.outerHTML}
+            <button class="copy-btn" onclick="copyCode(this)">⎘ Copy</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function copyCode(btn) {
+    const code = btn.closest('.code-wrap').querySelector('.code-block').innerText;
+    navigator.clipboard.writeText(code).then(() => {
+      btn.textContent = '✔ Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '⎘ Copy'; btn.classList.remove('copied'); }, 2000);
+    }).catch(() => {
+      btn.textContent = 'Failed';
+      setTimeout(() => { btn.textContent = '⎘ Copy'; }, 2000);
+    });
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 4000);
+  }
+
+  function renderResults(d) {
+    const color = scoreColor(d.overallScore);
+    const label = scoreLabel(d.overallScore);
+
+    const html = `
+      <div class="panel-header">
+        <div class="dot" style="background:${color}"></div>
+        Review Results
+      </div>
+      <div class="score-block">
+        <div class="ring-wrap">${buildRing(d.overallScore, color)}</div>
+        <div class="score-label">
+          <h2 style="color:${color}">${label}</h2>
+          <p>Overall code quality score</p>
+        </div>
+      </div>
+      <div class="sections">
+        ${buildSection('s-summary',  '📋', 'Summary',     d.summary  ? [d.summary] : [])}
+        ${buildSection('s-bugs',     '🐛', 'Bugs',        d.bugs        || [])}
+        ${buildSection('s-security', '🔒', 'Security',    d.security    || [])}
+        ${buildSection('s-perf',     '⚡', 'Performance', d.performance || [])}
+        ${buildSection('s-suggest',  '💡', 'Suggestions', d.suggestions || [])}
+        ${d.fixedCode ? buildFixedCode(d.fixedCode) : ''}
+      </div>`;
+
+    const panel = document.getElementById('results-panel');
+    panel.innerHTML = html;
+    panel.classList.add('visible');
+    document.getElementById('placeholder-panel').style.display = 'none';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // Tab key inserts spaces in textarea
+  document.getElementById('code').addEventListener('keydown', e => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const el = e.target, s = el.selectionStart, end = el.selectionEnd;
+      el.value = el.value.substring(0, s) + '    ' + el.value.substring(end);
+      el.selectionStart = el.selectionEnd = s + 4;
+    }
+  });
+
+  // Ctrl/Cmd+Enter submits whichever panel is active
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      const isGithub = document.getElementById('github-input-panel').style.display !== 'none';
+      isGithub ? submitGithubReview() : submitReview();
+    }
+  });
+</script>
+</body>
+</html>

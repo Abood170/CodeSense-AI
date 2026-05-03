@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)",
+      "Bash(netstat -ano)",
+      "Bash(awk '{print $5}')",
+      "Bash(cmd:*)",
+      "Bash(./gradlew bootRun)",
+      "Bash(echo \"PID=$!\")",
+      "Bash(./gradlew compileJava processResources)",
+      "Bash(grep -v \"^0$\")",
+      "Bash(read pid:*)"
+    ]
+  }
+}
